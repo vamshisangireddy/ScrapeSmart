@@ -6,6 +6,52 @@ const generateMockFieldsForUrl = (url: string): DetectedField[] => {
   const domain = new URL(url).hostname;
   const pathname = new URL(url).pathname;
   
+  // Specific handling for scrapethissite.com
+  if (domain.includes('scrapethissite.com') && pathname.includes('simple')) {
+    return [
+      {
+        id: 'field_country_name_1',
+        name: 'Country Name',
+        type: 'title',
+        selectors: ['h3', '.country-name', '.name'],
+        elements: 250,
+        sampleData: ['Andorra', 'United Arab Emirates', 'Afghanistan', 'Antigua and Barbuda', 'Anguilla'],
+        confidence: 98,
+        selected: true
+      },
+      {
+        id: 'field_capital_2',
+        name: 'Capital City',
+        type: 'capital',
+        selectors: ['.capital', '.country-capital', 'span.capital'],
+        elements: 250,
+        sampleData: ['Andorra la Vella', 'Abu Dhabi', 'Kabul', "St. John's", 'The Valley'],
+        confidence: 96,
+        selected: true
+      },
+      {
+        id: 'field_population_3',
+        name: 'Population',
+        type: 'population',
+        selectors: ['.population', '.country-population', 'span.population'],
+        elements: 250,
+        sampleData: ['84000', '4975593', '29121286', '86754', '13254'],
+        confidence: 95,
+        selected: true
+      },
+      {
+        id: 'field_area_4',
+        name: 'Area (km²)',
+        type: 'area',
+        selectors: ['.area', '.country-area', 'span.area'],
+        elements: 250,
+        sampleData: ['468.0', '82880.0', '647500.0', '443.0', '102.0'],
+        confidence: 94,
+        selected: true
+      }
+    ];
+  }
+  
   // Different field patterns based on URL content
   const getFieldsForType = () => {
     if (pathname.includes('product') || pathname.includes('shop') || pathname.includes('store')) {
@@ -178,15 +224,17 @@ const generateMockFieldsForUrl = (url: string): DetectedField[] => {
 };
 
 export function useUrlAnalysis() {
-  const [currentUrl, setCurrentUrl] = useState('https://www.example-store.com/products');
+  const [currentUrl, setCurrentUrl] = useState('https://www.scrapethissite.com/pages/simple/');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [pageInfo, setPageInfo] = useState<PageInfo>({
-    url: 'https://www.example-store.com/products',
-    title: 'Premium Electronics Store - Product Catalog',
-    domain: 'example-store.com'
+    url: 'https://www.scrapethissite.com/pages/simple/',
+    title: 'Countries of the World - Scrape This Site',
+    domain: 'scrapethissite.com',
+    description: 'A simple example page listing information about all countries in the world (250 items)',
+    type: 'directory'
   });
   const [detectedFields, setDetectedFields] = useState<DetectedField[]>(() => 
-    generateMockFieldsForUrl('https://www.example-store.com/products')
+    generateMockFieldsForUrl('https://www.scrapethissite.com/pages/simple/')
   );
 
   const analyzeUrl = useCallback(async (url: string) => {
@@ -203,12 +251,22 @@ export function useUrlAnalysis() {
       
       // Generate appropriate title based on URL
       let title = 'Website Analysis Results';
-      if (pathname.includes('product') || pathname.includes('shop')) {
+      let description = `Intelligent analysis of ${domain} page structure and content.`;
+      let type = 'general';
+      
+      if (domain.includes('scrapethissite.com') && pathname.includes('simple')) {
+        title = 'Countries of the World - Scrape This Site';
+        description = 'A simple example page listing information about all countries in the world (250 items)';
+        type = 'directory';
+      } else if (pathname.includes('product') || pathname.includes('shop')) {
         title = `${domain} - Product Catalog`;
+        type = 'ecommerce';
       } else if (pathname.includes('news') || pathname.includes('article')) {
         title = `${domain} - News & Articles`;
+        type = 'news';
       } else if (pathname.includes('job') || pathname.includes('career')) {
         title = `${domain} - Career Opportunities`;
+        type = 'jobs';
       } else {
         title = `${domain} - Website Content`;
       }
@@ -216,7 +274,9 @@ export function useUrlAnalysis() {
       const newPageInfo: PageInfo = {
         url,
         title,
-        domain
+        domain,
+        description,
+        type
       };
       
       const newFields = generateMockFieldsForUrl(url);
