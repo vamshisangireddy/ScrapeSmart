@@ -41,6 +41,7 @@ export default function RealScraperPage() {
 
   const [selectedFormat, setSelectedFormat] = useState<'csv' | 'json' | 'xml' | 'excel'>('csv');
   const [filename, setFilename] = useState('scraped_data');
+  const [viewMode, setViewMode] = useState<'table' | 'json' | 'cards'>('table');
 
   const selectedFieldsCount = detectedFields.filter(field => field.selected).length;
   const hasScrapedData = scrapedData.length > 0;
@@ -151,19 +152,29 @@ export default function RealScraperPage() {
                   Export Settings
                 </CardTitle>
               </CardHeader>
-              <CardContent>
-                <ExportOptionsComponent
-                  selectedFormat={selectedFormat}
-                  exportOptions={{
-                    format: selectedFormat,
-                    filename,
-                    includePagination: false,
-                    autoScroll: true,
-                    removeDuplicates: true,
-                    delay: 1000
-                  }}
-                  onOptionsChange={(options: any) => setFilename(options.filename)}
-                />
+              <CardContent className="space-y-4">
+                <div>
+                  <label className="text-sm font-medium">Export Format</label>
+                  <select 
+                    value={selectedFormat} 
+                    onChange={(e) => setSelectedFormat(e.target.value as any)}
+                    className="w-full mt-1 p-2 border rounded-md"
+                  >
+                    <option value="csv">CSV</option>
+                    <option value="json">JSON</option>
+                    <option value="xml">XML</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Filename</label>
+                  <input 
+                    type="text" 
+                    value={filename}
+                    onChange={(e) => setFilename(e.target.value)}
+                    className="w-full mt-1 p-2 border rounded-md"
+                    placeholder="scraped_data"
+                  />
+                </div>
               </CardContent>
             </Card>
           </div>
@@ -255,47 +266,174 @@ export default function RealScraperPage() {
           <div className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center">
-                  <CheckCircle className={`h-5 w-5 mr-2 ${hasScrapedData ? 'text-green-600' : 'text-gray-400'}`} />
-                  Scraped Data
+                <CardTitle className="flex items-center justify-between">
+                  <div className="flex items-center">
+                    <CheckCircle className={`h-5 w-5 mr-2 ${hasScrapedData ? 'text-green-600' : 'text-gray-400'}`} />
+                    Live Data Preview
+                  </div>
+                  {hasScrapedData && (
+                    <Badge variant="secondary">
+                      {scrapedData.length} items
+                    </Badge>
+                  )}
                 </CardTitle>
                 <CardDescription>
                   {hasScrapedData 
-                    ? `${scrapedData.length} items extracted successfully`
-                    : 'No data scraped yet'
+                    ? `Real-time preview of ${scrapedData.length} extracted items`
+                    : 'Live data will appear here as you scrape'
                   }
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 {hasScrapedData ? (
                   <div className="space-y-4">
-                    <div className="max-h-96 overflow-y-auto">
-                      <div className="space-y-3">
-                        {scrapedData.slice(0, 10).map((item, index) => (
-                          <div key={index} className="p-3 bg-gray-50 rounded-lg text-sm">
-                            <div className="font-medium text-gray-600 mb-2">Item {index + 1}</div>
-                            {Object.entries(item).map(([key, value]) => (
-                              <div key={key} className="flex justify-between">
-                                <span className="text-gray-600">{key}:</span>
-                                <span className="text-gray-800 ml-2 text-right">
-                                  {Array.isArray(value) ? value.join(', ') : String(value)}
-                                </span>
-                              </div>
+                    {/* Data View Tabs */}
+                    <div className="flex space-x-2 border-b">
+                      <Button 
+                        variant={viewMode === 'table' ? 'default' : 'ghost'} 
+                        size="sm" 
+                        onClick={() => setViewMode('table')}
+                        className={viewMode === 'table' ? 'border-b-2 border-primary' : ''}
+                      >
+                        Table View
+                      </Button>
+                      <Button 
+                        variant={viewMode === 'json' ? 'default' : 'ghost'} 
+                        size="sm"
+                        onClick={() => setViewMode('json')}
+                        className={viewMode === 'json' ? 'border-b-2 border-primary' : ''}
+                      >
+                        JSON View
+                      </Button>
+                      <Button 
+                        variant={viewMode === 'cards' ? 'default' : 'ghost'} 
+                        size="sm"
+                        onClick={() => setViewMode('cards')}
+                        className={viewMode === 'cards' ? 'border-b-2 border-primary' : ''}
+                      >
+                        Card View
+                      </Button>
+                    </div>
+
+                    {/* Table View */}
+                    {viewMode === 'table' && (
+                      <div className="max-h-96 overflow-auto border rounded-lg">
+                        <table className="w-full text-sm">
+                          <thead className="bg-gray-50 sticky top-0">
+                            <tr>
+                              <th className="px-3 py-2 text-left border-r">#</th>
+                              {Object.keys(scrapedData[0] || {}).filter(key => key !== 'id').map((key) => (
+                                <th key={key} className="px-3 py-2 text-left border-r">
+                                  {key}
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {scrapedData.slice(0, 50).map((item, index) => (
+                              <tr key={index} className="border-b hover:bg-gray-50">
+                                <td className="px-3 py-2 border-r font-medium text-gray-600">
+                                  {index + 1}
+                                </td>
+                                {Object.entries(item).filter(([key]) => key !== 'id').map(([key, value]) => (
+                                  <td key={key} className="px-3 py-2 border-r">
+                                    <div className="max-w-xs truncate" title={String(value)}>
+                                      {Array.isArray(value) ? value.join(', ') : String(value)}
+                                    </div>
+                                  </td>
+                                ))}
+                              </tr>
                             ))}
-                          </div>
-                        ))}
-                        {scrapedData.length > 10 && (
-                          <div className="text-center text-gray-500 text-sm">
-                            ... and {scrapedData.length - 10} more items
+                          </tbody>
+                        </table>
+                        
+                        {scrapedData.length > 50 && (
+                          <div className="p-3 text-center text-gray-500 text-sm bg-gray-50">
+                            Showing first 50 items. Total: {scrapedData.length} items
                           </div>
                         )}
                       </div>
+                    )}
+
+                    {/* JSON View */}
+                    {viewMode === 'json' && (
+                      <div className="max-h-96 overflow-auto border rounded-lg bg-gray-50 p-4">
+                        <pre className="text-xs overflow-x-auto">
+                          {JSON.stringify(scrapedData.slice(0, 10), null, 2)}
+                        </pre>
+                        {scrapedData.length > 10 && (
+                          <div className="mt-4 text-center text-gray-500 text-sm">
+                            Showing first 10 items as JSON. Total: {scrapedData.length} items
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Card View */}
+                    {viewMode === 'cards' && (
+                      <div className="max-h-96 overflow-y-auto space-y-3">
+                        {scrapedData.slice(0, 20).map((item, index) => (
+                          <div key={index} className="p-4 border rounded-lg hover:shadow-md transition-shadow">
+                            <div className="flex justify-between items-start mb-3">
+                              <h4 className="font-medium text-gray-900">Item {index + 1}</h4>
+                              <Badge variant="outline" className="text-xs">
+                                {Object.keys(item).length - 1} fields
+                              </Badge>
+                            </div>
+                            <div className="grid grid-cols-1 gap-2">
+                              {Object.entries(item).filter(([key]) => key !== 'id').map(([key, value]) => (
+                                <div key={key} className="flex justify-between">
+                                  <span className="text-sm font-medium text-gray-600">{key}:</span>
+                                  <span className="text-sm text-gray-800 text-right ml-2 max-w-xs truncate">
+                                    {Array.isArray(value) ? value.join(', ') : String(value)}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                        {scrapedData.length > 20 && (
+                          <div className="text-center text-gray-500 text-sm">
+                            Showing first 20 items. Total: {scrapedData.length} items
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Quick Stats */}
+                    <div className="grid grid-cols-2 gap-4 pt-4 border-t">
+                      <div className="text-center">
+                        <div className="text-2xl font-bold text-primary">{scrapedData.length}</div>
+                        <div className="text-sm text-gray-600">Total Items</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-2xl font-bold text-primary">
+                          {Object.keys(scrapedData[0] || {}).length - 1}
+                        </div>
+                        <div className="text-sm text-gray-600">Data Fields</div>
+                      </div>
+                    </div>
+
+                    {/* Live Updates Indicator */}
+                    <div className="flex items-center justify-between pt-4 border-t">
+                      <div className="flex items-center space-x-2">
+                        <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                        <span className="text-sm text-gray-600">Live Preview Active</span>
+                      </div>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => window.location.reload()}
+                      >
+                        Refresh Data
+                      </Button>
                     </div>
                   </div>
                 ) : (
-                  <div className="text-center py-8 text-gray-500">
-                    <Database className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                    <p>Start scraping to see extracted data here</p>
+                  <div className="text-center py-12 text-gray-500">
+                    <Database className="h-16 w-16 mx-auto mb-4 text-gray-300" />
+                    <h3 className="font-medium mb-2">No Data Yet</h3>
+                    <p className="text-sm">Select fields and start scraping to see live data preview</p>
                   </div>
                 )}
               </CardContent>
