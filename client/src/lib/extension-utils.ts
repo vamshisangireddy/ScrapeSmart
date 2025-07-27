@@ -1,20 +1,36 @@
 import type { DetectedField, ScrapedData, ExportOptions, PageInfo, ScrapingTemplate } from '@shared/schema';
+import { MockExtensionAPI } from './mock-extension';
+
+// Type-safe Chrome API checks
+const isExtensionEnvironment = () => {
+  return typeof window !== 'undefined' && 
+         typeof (window as any).chrome !== 'undefined' && 
+         (window as any).chrome.runtime?.id;
+};
 
 // Chrome extension messaging utilities
 export class ExtensionAPI {
-  static async getCurrentTab(): Promise<chrome.tabs.Tab | null> {
-    if (typeof chrome === 'undefined' || !chrome.tabs) return null;
+  static async getCurrentTab(): Promise<any> {
+    if (!isExtensionEnvironment()) {
+      return MockExtensionAPI.getCurrentTab();
+    }
     
+    const chrome = (window as any).chrome;
     const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
     return tabs[0] || null;
   }
 
   static async sendMessageToActiveTab(message: any): Promise<any> {
+    if (!isExtensionEnvironment()) {
+      return MockExtensionAPI.sendMessageToActiveTab(message);
+    }
+
+    const chrome = (window as any).chrome;
     const tab = await this.getCurrentTab();
     if (!tab?.id) throw new Error('No active tab found');
     
     return new Promise((resolve, reject) => {
-      chrome.tabs.sendMessage(tab.id!, message, (response) => {
+      chrome.tabs.sendMessage(tab.id, message, (response: any) => {
         if (chrome.runtime.lastError) {
           reject(new Error(chrome.runtime.lastError.message));
         } else {
@@ -25,6 +41,10 @@ export class ExtensionAPI {
   }
 
   static async detectFields(): Promise<DetectedField[]> {
+    if (!isExtensionEnvironment()) {
+      return MockExtensionAPI.detectFields();
+    }
+
     try {
       const response = await this.sendMessageToActiveTab({ action: 'detectFields' });
       if (response?.success) {
@@ -41,6 +61,10 @@ export class ExtensionAPI {
   }
 
   static async scrapeFields(selectedFields: DetectedField[]): Promise<ScrapedData[]> {
+    if (!isExtensionEnvironment()) {
+      return MockExtensionAPI.scrapeFields(selectedFields);
+    }
+
     try {
       const response = await this.sendMessageToActiveTab({ 
         action: 'scrapeFields', 
@@ -58,6 +82,10 @@ export class ExtensionAPI {
   }
 
   static async getPageInfo(): Promise<PageInfo | null> {
+    if (!isExtensionEnvironment()) {
+      return MockExtensionAPI.getPageInfo();
+    }
+
     try {
       const response = await this.sendMessageToActiveTab({ action: 'getPageInfo' });
       if (response?.success) {
@@ -71,6 +99,11 @@ export class ExtensionAPI {
   }
 
   static async exportData(data: ScrapedData[], options: ExportOptions): Promise<void> {
+    if (!isExtensionEnvironment()) {
+      return MockExtensionAPI.exportData(data, options);
+    }
+
+    const chrome = (window as any).chrome;
     const filename = options.filename || `scraped-data-${Date.now()}.${options.format}`;
     
     return new Promise((resolve, reject) => {
@@ -79,7 +112,7 @@ export class ExtensionAPI {
         data: data,
         format: options.format,
         filename: filename
-      }, (response) => {
+      }, (response: any) => {
         if (chrome.runtime.lastError) {
           reject(new Error(chrome.runtime.lastError.message));
         } else if (response?.success) {
@@ -92,11 +125,16 @@ export class ExtensionAPI {
   }
 
   static async saveTemplate(template: Omit<ScrapingTemplate, 'id' | 'createdAt'>): Promise<void> {
+    if (!isExtensionEnvironment()) {
+      return MockExtensionAPI.saveTemplate(template);
+    }
+
+    const chrome = (window as any).chrome;
     return new Promise((resolve, reject) => {
       chrome.runtime.sendMessage({
         action: 'saveTemplate',
         template: template
-      }, (response) => {
+      }, (response: any) => {
         if (chrome.runtime.lastError) {
           reject(new Error(chrome.runtime.lastError.message));
         } else if (response?.success) {
@@ -109,10 +147,15 @@ export class ExtensionAPI {
   }
 
   static async loadTemplates(): Promise<ScrapingTemplate[]> {
+    if (!isExtensionEnvironment()) {
+      return MockExtensionAPI.loadTemplates();
+    }
+
+    const chrome = (window as any).chrome;
     return new Promise((resolve, reject) => {
       chrome.runtime.sendMessage({
         action: 'loadTemplates'
-      }, (response) => {
+      }, (response: any) => {
         if (chrome.runtime.lastError) {
           reject(new Error(chrome.runtime.lastError.message));
         } else if (response?.success) {
@@ -125,17 +168,15 @@ export class ExtensionAPI {
   }
 
   static generateFilename(format: string, pageTitle?: string): string {
-    const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
-    const title = pageTitle ? 
-      pageTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 30) : 
-      'scraped-data';
-    return `${title}-${timestamp}.${format}`;
+    return MockExtensionAPI.generateFilename(format, pageTitle);
   }
 
   static async checkExtensionContext(): Promise<boolean> {
-    return typeof chrome !== 'undefined' && 
-           chrome.runtime && 
-           chrome.runtime.id !== undefined;
+    if (!isExtensionEnvironment()) {
+      return MockExtensionAPI.checkExtensionContext();
+    }
+    const chrome = (window as any).chrome;
+    return chrome.runtime.id !== undefined;
   }
 }
 
