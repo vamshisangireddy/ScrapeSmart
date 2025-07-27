@@ -47,7 +47,9 @@ export const exportOptionsSchema = z.object({
 export const pageInfoSchema = z.object({
   url: z.string(),
   title: z.string(),
-  domain: z.string()
+  domain: z.string(),
+  description: z.string().optional(),
+  type: z.string().optional()
 });
 
 // Types

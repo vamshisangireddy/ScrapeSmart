@@ -5,14 +5,16 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import PopupPage from "@/pages/popup";
 import DemoPage from "@/pages/demo";
+import RealScraperPage from "@/pages/real-scraper";
 import NotFound from "@/pages/not-found";
 
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={DemoPage} />
+      <Route path="/" component={RealScraperPage} />
       <Route path="/popup" component={PopupPage} />
       <Route path="/demo" component={DemoPage} />
+      <Route path="/scraper" component={RealScraperPage} />
       <Route component={NotFound} />
     </Switch>
   );
