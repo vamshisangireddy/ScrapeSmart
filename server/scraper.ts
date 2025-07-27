@@ -80,33 +80,33 @@ export class WebScraper {
           selectors: ['.country h3'],
           elements: allNames.length,
           sampleData: allNames.slice(0, 5),
-          confidence: 98,
+          confidence: 95,
           selected: true
         });
       }
     }
 
-    // Capital city
-    const capitalSpan = firstContainer.find('.country-capital');
-    if (capitalSpan.length > 0) {
+    // Capital
+    const capital = firstContainer.find('.country-capital').text().trim();
+    if (capital) {
       const allCapitals = containers.map((i, el) => $(el).find('.country-capital').text().trim()).get().filter(cap => cap);
       if (allCapitals.length > 0) {
         fields.push({
           id: `field_capital_${fieldCounter++}`,
-          name: 'Capital City',
+          name: 'Capital',
           type: 'capital',
           selectors: ['.country-capital'],
           elements: allCapitals.length,
           sampleData: allCapitals.slice(0, 5),
-          confidence: 96,
+          confidence: 90,
           selected: true
         });
       }
     }
 
     // Population
-    const populationSpan = firstContainer.find('.country-population');
-    if (populationSpan.length > 0) {
+    const population = firstContainer.find('.country-population').text().trim();
+    if (population) {
       const allPopulations = containers.map((i, el) => $(el).find('.country-population').text().trim()).get().filter(pop => pop);
       if (allPopulations.length > 0) {
         fields.push({
@@ -116,25 +116,25 @@ export class WebScraper {
           selectors: ['.country-population'],
           elements: allPopulations.length,
           sampleData: allPopulations.slice(0, 5),
-          confidence: 95,
+          confidence: 90,
           selected: true
         });
       }
     }
 
     // Area
-    const areaSpan = firstContainer.find('.country-area');
-    if (areaSpan.length > 0) {
+    const area = firstContainer.find('.country-area').text().trim();
+    if (area) {
       const allAreas = containers.map((i, el) => $(el).find('.country-area').text().trim()).get().filter(area => area);
       if (allAreas.length > 0) {
         fields.push({
           id: `field_area_${fieldCounter++}`,
-          name: 'Area (km²)',
+          name: 'Area',
           type: 'area',
           selectors: ['.country-area'],
           elements: allAreas.length,
           sampleData: allAreas.slice(0, 5),
-          confidence: 94,
+          confidence: 90,
           selected: true
         });
       }
@@ -144,83 +144,37 @@ export class WebScraper {
   private analyzeContainerPattern($: cheerio.CheerioAPI, containers: cheerio.Cheerio<any>, fields: DetectedField[], fieldCounter: number, containerSelector: string): void {
     const firstContainer = containers.first();
     
-    // Analyze the structure of the first container to identify field patterns
-    const headings = firstContainer.find('h1, h2, h3, h4, h5, h6');
-    const strongTexts = firstContainer.find('strong, b');
-    const spans = firstContainer.find('span[class]');
-    const divs = firstContainer.find('div[class]');
+    // Look for common patterns within containers
+    const commonElements = [
+      { selector: 'h1, h2, h3, h4, h5, h6', type: 'heading', name: 'Headings' },
+      { selector: '.price, [class*="price"]', type: 'price', name: 'Prices' },
+      { selector: 'a[href]', type: 'link', name: 'Links' },
+      { selector: 'img[src]', type: 'image', name: 'Images' },
+      { selector: 'p', type: 'description', name: 'Descriptions' }
+    ];
 
-    // Detect title/name fields
-    if (headings.length > 0) {
-      const selector = `${containerSelector} ${headings.get(0).tagName.toLowerCase()}`;
-      const allTitles = containers.map((i, el) => $(el).find(headings.get(0).tagName.toLowerCase()).first().text().trim()).get().filter(title => title);
-      if (allTitles.length >= 3) {
-        fields.push({
-          id: `field_title_${fieldCounter++}`,
-          name: 'Title/Name',
-          type: 'title',
-          selectors: [selector],
-          elements: allTitles.length,
-          sampleData: allTitles.slice(0, 5),
-          confidence: 92,
-          selected: true
-        });
+    for (const element of commonElements) {
+      const elementInFirst = firstContainer.find(element.selector).first();
+      if (elementInFirst.length > 0) {
+        const allValues = containers.map((i, container) => {
+          const found = $(container).find(element.selector).first();
+          return element.type === 'image' ? found.attr('src') || found.attr('alt') : found.text().trim();
+        }).get().filter(value => value);
+
+        if (allValues.length >= containers.length * 0.5) { // At least 50% of containers have this element
+          fields.push({
+            id: `field_${element.type}_${fieldCounter++}`,
+            name: this.formatFieldName(element.name),
+            type: element.type,
+            selectors: [`${containerSelector} ${element.selector}`],
+            elements: allValues.length,
+            sampleData: allValues.slice(0, 5),
+            confidence: 85,
+            selected: true
+          });
+        }
       }
     }
-
-    // Detect labeled fields (strong: value pattern)
-    strongTexts.each((i, strongEl) => {
-      const strongText = $(strongEl).text().trim();
-      if (strongText.includes(':')) {
-        const label = strongText.split(':')[0].trim();
-        const nextSibling = $(strongEl).next();
-        if (nextSibling.length > 0) {
-          const selector = `${containerSelector} strong:contains("${label}") + *`;
-          const allValues = containers.map((i, el) => {
-            const value = $(el).find(`strong:contains("${label}")`).next().text().trim();
-            return value;
-          }).get().filter(val => val);
-          
-          if (allValues.length >= 3) {
-            fields.push({
-              id: `field_${label.toLowerCase().replace(/\s+/g, '_')}_${fieldCounter++}`,
-              name: label,
-              type: this.guessFieldType(label),
-              selectors: [selector],
-              elements: allValues.length,
-              sampleData: allValues.slice(0, 5),
-              confidence: 88,
-              selected: true
-            });
-          }
-        }
-      }
-    });
-
-    // Detect class-based fields
-    spans.each((i, spanEl) => {
-      const className = $(spanEl).attr('class');
-      if (className && className.includes('-')) {
-        const fieldName = className.split('-').pop();
-        if (fieldName && fieldName.length > 2) {
-          const selector = `${containerSelector} .${className}`;
-          const allValues = containers.map((i, el) => $(el).find(`.${className}`).text().trim()).get().filter(val => val);
-          
-          if (allValues.length >= 3 && !fields.some(f => f.selectors.includes(selector))) {
-            fields.push({
-              id: `field_${fieldName}_${fieldCounter++}`,
-              name: this.formatFieldName(fieldName),
-              type: this.guessFieldType(fieldName),
-              selectors: [selector],
-              elements: allValues.length,
-              sampleData: allValues.slice(0, 5),
-              confidence: 85,
-              selected: true
-            });
-          }
-        }
-      }
-    });
   }
 
   private detectContentPatterns($: cheerio.CheerioAPI, fields: DetectedField[], fieldCounter: number): void {
@@ -275,84 +229,6 @@ export class WebScraper {
         });
       }
     }
-  }
-
-  private guessFieldType(label: string): string {
-    const lowerLabel = label.toLowerCase();
-    if (lowerLabel.includes('price') || lowerLabel.includes('cost') || lowerLabel.includes('amount')) return 'price';
-    if (lowerLabel.includes('population')) return 'population';
-    if (lowerLabel.includes('capital')) return 'capital';
-    if (lowerLabel.includes('area') || lowerLabel.includes('size')) return 'area';
-    if (lowerLabel.includes('country') || lowerLabel.includes('nation')) return 'country';
-    if (lowerLabel.includes('name') || lowerLabel.includes('title')) return 'title';
-    if (lowerLabel.includes('date') || lowerLabel.includes('time')) return 'date';
-    if (lowerLabel.includes('email')) return 'email';
-    if (lowerLabel.includes('phone')) return 'phone';
-    if (lowerLabel.includes('address') || lowerLabel.includes('location')) return 'location';
-    return 'text';
-  }
-
-  private formatFieldName(fieldName: string): string {
-    return fieldName
-      .split(/[-_]/)
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(' ');
-  }
-    return fieldName
-      .split(/[-_]/)
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(' ');
-  }
-
-    // Detect links
-    const links = $('a[href]').not('script, style');
-    if (links.length > 0) {
-      const sampleData = links.slice(0, 5).map((i, el) => $(el).text().trim()).get().filter(text => text);
-      if (sampleData.length > 0) {
-        fields.push({
-          id: `field_links_${fieldCounter++}`,
-          name: 'Links',
-          type: 'link',
-          selectors: ['a[href]'],
-          elements: links.length,
-          sampleData,
-          confidence: 85,
-          selected: false
-        });
-      }
-    }
-
-    // Detect images
-    const images = $('img[src]').not('script, style');
-    if (images.length > 0) {
-      const sampleData = images.slice(0, 5).map((i, el) => $(el).attr('alt') || $(el).attr('src')).get();
-      fields.push({
-        id: `field_images_${fieldCounter++}`,
-        name: 'Images',
-        type: 'image',
-        selectors: ['img[src]'],
-        elements: images.length,
-        sampleData,
-        confidence: 80,
-        selected: false
-      });
-    }
-
-    // Detect paragraphs with substantial text
-    const paragraphs = $('p').not('script, style').filter((i, el) => $(el).text().trim().length > 20);
-    if (paragraphs.length > 0) {
-      const sampleData = paragraphs.slice(0, 3).map((i, el) => $(el).text().trim().substring(0, 100) + '...').get();
-      fields.push({
-        id: `field_paragraphs_${fieldCounter++}`,
-        name: 'Paragraphs',
-        type: 'description',
-        selectors: ['p'],
-        elements: paragraphs.length,
-        sampleData,
-        confidence: 75,
-        selected: false
-      });
-    }
 
     // Detect tables
     const tables = $('table').not('script, style');
@@ -377,75 +253,45 @@ export class WebScraper {
       });
     }
 
-    // Detect list items
-    const listItems = $('li').not('script, style').filter((i, el) => $(el).text().trim().length > 5);
-    if (listItems.length > 5) {
-      const sampleData = listItems.slice(0, 5).map((i, el) => $(el).text().trim()).get();
-      fields.push({
-        id: `field_list_items_${fieldCounter++}`,
-        name: 'List Items',
-        type: 'list',
-        selectors: ['li'],
-        elements: listItems.length,
-        sampleData,
-        confidence: 82,
-        selected: false
-      });
-    }
-
-    // Detect form inputs
-    const inputs = $('input[name], select[name], textarea[name]').not('script, style');
-    if (inputs.length > 0) {
-      const sampleData = inputs.slice(0, 5).map((i, el) => $(el).attr('name') || $(el).attr('placeholder')).get();
-      fields.push({
-        id: `field_form_inputs_${fieldCounter++}`,
-        name: 'Form Fields',
-        type: 'form',
-        selectors: ['input[name]', 'select[name]', 'textarea[name]'],
-        elements: inputs.length,
-        sampleData,
-        confidence: 88,
-        selected: false
-      });
-    }
-
-    // Detect common e-commerce patterns
-    const prices = $('[class*="price"], [id*="price"], .cost, .amount').not('script, style');
-    if (prices.length > 0) {
-      const sampleData = prices.slice(0, 5).map((i, el) => $(el).text().trim()).get().filter(text => text);
+    // Detect headings
+    const headings = $('h1, h2, h3, h4, h5, h6').not('script, style');
+    if (headings.length > 0) {
+      const sampleData = headings.slice(0, 5).map((i, el) => $(el).text().trim()).get().filter(text => text);
       if (sampleData.length > 0) {
         fields.push({
-          id: `field_prices_${fieldCounter++}`,
-          name: 'Prices',
-          type: 'price',
-          selectors: ['[class*="price"]', '[id*="price"]', '.cost', '.amount'],
-          elements: prices.length,
+          id: `field_headings_${fieldCounter++}`,
+          name: 'Headings',
+          type: 'heading',
+          selectors: ['h1', 'h2', 'h3', 'h4', 'h5', 'h6'],
+          elements: headings.length,
           sampleData,
-          confidence: 92,
-          selected: true
+          confidence: 88,
+          selected: false
         });
       }
     }
+  }
 
-    // Detect product names
-    const products = $('[class*="product"], [class*="item"], [class*="title"]:not(title)').not('script, style, meta');
-    if (products.length > 0) {
-      const sampleData = products.slice(0, 5).map((i, el) => $(el).text().trim()).get().filter(text => text && text.length > 3);
-      if (sampleData.length > 0) {
-        fields.push({
-          id: `field_products_${fieldCounter++}`,
-          name: 'Product/Item Names',
-          type: 'product',
-          selectors: ['[class*="product"]', '[class*="item"]', '[class*="title"]:not(title)'],
-          elements: products.length,
-          sampleData,
-          confidence: 87,
-          selected: true
-        });
-      }
-    }
+  private guessFieldType(label: string): string {
+    const lowerLabel = label.toLowerCase();
+    if (lowerLabel.includes('price') || lowerLabel.includes('cost') || lowerLabel.includes('amount')) return 'price';
+    if (lowerLabel.includes('population')) return 'population';
+    if (lowerLabel.includes('capital')) return 'capital';
+    if (lowerLabel.includes('area') || lowerLabel.includes('size')) return 'area';
+    if (lowerLabel.includes('country') || lowerLabel.includes('nation')) return 'country';
+    if (lowerLabel.includes('name') || lowerLabel.includes('title')) return 'title';
+    if (lowerLabel.includes('date') || lowerLabel.includes('time')) return 'date';
+    if (lowerLabel.includes('email')) return 'email';
+    if (lowerLabel.includes('phone')) return 'phone';
+    if (lowerLabel.includes('address') || lowerLabel.includes('location')) return 'location';
+    return 'text';
+  }
 
-    return fields.sort((a, b) => b.confidence - a.confidence);
+  private formatFieldName(fieldName: string): string {
+    return fieldName
+      .split(/[-_]/)
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
   }
 
   public async analyzePage(url: string): Promise<ScrapingResult> {
@@ -482,7 +328,6 @@ export class WebScraper {
     try {
       const html = await this.fetchPage(url);
       const $ = cheerio.load(html);
-      const results: Record<string, any>[] = [];
 
       // Use improved scraping algorithm based on field types
       return this.extractDataByPattern($, selectedFields);
@@ -527,37 +372,26 @@ export class WebScraper {
 
     containers.each((index, container) => {
       const $container = $(container);
-      const record: Record<string, any> = { id: index + 1 };
+      const record: Record<string, any> = {};
 
-      // Extract country name
-      const countryName = $container.find('h3').text().trim();
-      if (countryName) record['Country Name'] = countryName;
-
-      // Extract capital
-      const capital = $container.find('.country-capital').text().trim();
-      if (capital) record['Capital'] = capital;
-
-      // Extract population
-      const population = $container.find('.country-population').text().trim();
-      if (population) record['Population'] = population;
-
-      // Extract area
-      const area = $container.find('.country-area').text().trim();
-      if (area) record['Area'] = area;
-
-      // Extract any other selected fields
       selectedFields.forEach(field => {
-        if (!record[field.name]) {
-          field.selectors.forEach(selector => {
-            const value = $container.find(selector).text().trim();
-            if (value && !record[field.name]) {
-              record[field.name] = value;
-            }
-          });
+        switch (field.type) {
+          case 'country':
+            record[field.name] = $container.find('h3').text().trim();
+            break;
+          case 'capital':
+            record[field.name] = $container.find('.country-capital').text().trim();
+            break;
+          case 'population':
+            record[field.name] = $container.find('.country-population').text().trim();
+            break;
+          case 'area':
+            record[field.name] = $container.find('.country-area').text().trim();
+            break;
         }
       });
 
-      if (Object.keys(record).length > 1) {
+      if (Object.keys(record).length > 0) {
         results.push(record);
       }
     });
@@ -568,34 +402,38 @@ export class WebScraper {
   private extractFromContainers($: cheerio.CheerioAPI, containers: cheerio.Cheerio<any>, selectedFields: DetectedField[]): Record<string, any>[] {
     const results: Record<string, any>[] = [];
 
-    containers.slice(0, 100).each((index, container) => {
+    containers.each((index, container) => {
       const $container = $(container);
-      const record: Record<string, any> = { id: index + 1 };
+      const record: Record<string, any> = {};
 
       selectedFields.forEach(field => {
-        let bestValue = '';
-        let maxScore = 0;
-
+        const values: string[] = [];
+        
         field.selectors.forEach(selector => {
-          const elements = $container.find(selector);
-          elements.each((i, el) => {
-            const text = $(el).text().trim();
-            if (text) {
-              const score = this.scoreFieldMatch(text, field.type);
-              if (score > maxScore) {
-                maxScore = score;
-                bestValue = text;
-              }
+          $container.find(selector).each((i, el) => {
+            const $el = $(el);
+            let value = '';
+            
+            if (field.type === 'image') {
+              value = $el.attr('src') || $el.attr('alt') || '';
+            } else if (field.type === 'link') {
+              value = $el.attr('href') || $el.text().trim();
+            } else {
+              value = $el.text().trim();
+            }
+            
+            if (value) {
+              values.push(value);
             }
           });
         });
 
-        if (bestValue) {
-          record[field.name] = bestValue;
+        if (values.length > 0) {
+          record[field.name] = values.length === 1 ? values[0] : values;
         }
       });
 
-      if (Object.keys(record).length > 1) {
+      if (Object.keys(record).length > 0) {
         results.push(record);
       }
     });
@@ -605,77 +443,55 @@ export class WebScraper {
 
   private extractByIndividualSelectors($: cheerio.CheerioAPI, selectedFields: DetectedField[]): Record<string, any>[] {
     const results: Record<string, any>[] = [];
-    const maxItems = Math.min(50, this.getMaxElementCount($, selectedFields));
+    
+    // Find the maximum number of elements across all fields
+    let maxElements = 0;
+    const fieldData: Record<string, string[]> = {};
 
-    for (let i = 0; i < maxItems; i++) {
-      const record: Record<string, any> = { id: i + 1 };
-      let hasData = false;
-
-      selectedFields.forEach(field => {
-        field.selectors.forEach(selector => {
-          if (!record[field.name]) {
-            const element = $(selector).eq(i);
-            if (element.length > 0) {
-              const text = element.text().trim();
-              if (text) {
-                record[field.name] = text;
-                hasData = true;
-              }
-            }
+    selectedFields.forEach(field => {
+      const values: string[] = [];
+      
+      field.selectors.forEach(selector => {
+        $(selector).each((i, el) => {
+          const $el = $(el);
+          let value = '';
+          
+          if (field.type === 'image') {
+            value = $el.attr('src') || $el.attr('alt') || '';
+          } else if (field.type === 'link') {
+            value = $el.attr('href') || $el.text().trim();
+          } else {
+            value = $el.text().trim();
+          }
+          
+          if (value) {
+            values.push(value);
           }
         });
       });
 
+      fieldData[field.name] = values;
+      maxElements = Math.max(maxElements, values.length);
+    });
+
+    // Create records by combining data at each index
+    for (let i = 0; i < maxElements; i++) {
+      const record: Record<string, any> = {};
+      let hasData = false;
+
+      selectedFields.forEach(field => {
+        const values = fieldData[field.name];
+        if (values && values[i]) {
+          record[field.name] = values[i];
+          hasData = true;
+        }
+      });
+
       if (hasData) {
         results.push(record);
-      } else {
-        break;
       }
     }
 
     return results;
-  }
-
-  private scoreFieldMatch(text: string, fieldType: string): number {
-    let score = 1;
-    const lowerText = text.toLowerCase();
-
-    switch (fieldType) {
-      case 'price':
-        if (/[\$£€¥]|\d+\.?\d*/.test(text)) score += 3;
-        break;
-      case 'population':
-        if (/^\d{1,3}(,\d{3})*$/.test(text) || /^\d+$/.test(text)) score += 3;
-        break;
-      case 'area':
-        if (/\d+\.?\d*/.test(text) && (lowerText.includes('km') || lowerText.includes('mi'))) score += 3;
-        break;
-      case 'email':
-        if (/@/.test(text)) score += 3;
-        break;
-      case 'phone':
-        if (/[\+\-\(\)\d\s]{10,}/.test(text)) score += 2;
-        break;
-      case 'title':
-        if (text.length > 5 && text.length < 100) score += 1;
-        break;
-    }
-
-    return score;
-  }
-
-  private getMaxElementCount($: cheerio.CheerioAPI, selectedFields: DetectedField[]): number {
-    let maxCount = 0;
-
-    selectedFields.forEach(field => {
-      field.selectors.forEach(selector => {
-        const count = $(selector).length;
-        if (count > maxCount) {
-          maxCount = count;
-        }
-      });
-    });
-
-    return maxCount;
   }
 }
