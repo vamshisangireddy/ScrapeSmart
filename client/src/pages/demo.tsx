@@ -1,29 +1,34 @@
 import { useExtension } from "@/hooks/use-extension";
+import { useUrlAnalysis } from "@/hooks/use-url-analysis";
 import { AutoDetectedFields } from "@/components/extension/auto-detected-fields";
 import { ExportOptionsComponent } from "@/components/extension/export-options";
 import { ProgressOverlay } from "@/components/extension/progress-overlay";
 import { ActionButtons } from "@/components/extension/action-buttons";
+import { UrlInput } from "@/components/extension/url-input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Settings, Bot, Monitor, Chrome, Download, Wand2 } from "lucide-react";
+import { Settings, Bot, Monitor, Chrome, Download, Wand2, Globe } from "lucide-react";
 
 export default function DemoPage() {
   const {
-    isExtensionContext,
-    pageInfo,
-    detectedFields,
-    isDetecting,
     isScraping,
     scrapingProgress,
     selectedFormat,
     exportOptions,
-    detectFields,
-    toggleField,
     selectFormat,
     startScraping,
     saveTemplate,
     updateExportOptions
   } = useExtension();
+
+  const {
+    currentUrl,
+    pageInfo,
+    detectedFields,
+    isAnalyzing,
+    analyzeUrl,
+    toggleField
+  } = useUrlAnalysis();
 
   const selectedFieldsCount = detectedFields.filter(field => field.selected).length;
 
@@ -140,12 +145,18 @@ export default function DemoPage() {
               </header>
 
               {/* Extension Main Content */}
-              <div className="h-[480px] overflow-y-auto">
+              <div className="h-[520px] overflow-y-auto">
+                <UrlInput
+                  currentUrl={currentUrl}
+                  onUrlSubmit={analyzeUrl}
+                  isAnalyzing={isAnalyzing}
+                />
+
                 <AutoDetectedFields
                   fields={detectedFields}
-                  isDetecting={isDetecting}
+                  isDetecting={isAnalyzing}
                   onToggleField={toggleField}
-                  onDetectMore={detectFields}
+                  onDetectMore={() => analyzeUrl(currentUrl)}
                 />
 
                 <ExportOptionsComponent
