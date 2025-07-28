@@ -2,21 +2,28 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { WebScraper } from "./scraper";
+import { MLWebScraper } from "./ml-scraper";
 import { z } from "zod";
 import { detectedFieldSchema } from "@shared/schema";
 
 const scraper = new WebScraper();
+const mlScraper = new MLWebScraper();
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Health check
   app.get("/api/health", (req, res) => {
-    res.json({ status: "ok" });
+    res.json({ 
+      status: "ok", 
+      timestamp: new Date().toISOString(),
+      version: "2.0.0-ml",
+      features: ["ml-analysis", "semantic-detection", "pattern-learning"]
+    });
   });
 
-  // Analyze a webpage and detect fields
+  // Enhanced ML-powered analysis endpoint
   app.post("/api/analyze", async (req, res) => {
     try {
-      const { url } = req.body;
+      const { url, options = {} } = req.body;
       
       if (!url || typeof url !== 'string') {
         return res.status(400).json({ error: 'URL is required' });
@@ -29,8 +36,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'Invalid URL format' });
       }
 
-      const result = await scraper.analyzePage(url);
-      res.json(result);
+      // Use ML scraper with advanced options
+      const mlOptions = {
+        useNLP: options.useNLP !== false,
+        enablePatternLearning: options.enablePatternLearning !== false,
+        semanticAnalysis: options.semanticAnalysis !== false,
+        confidenceThreshold: options.confidenceThreshold || 0.7
+      };
+
+      try {
+        const result = await mlScraper.analyzePageWithML(url, mlOptions);
+        res.json({
+          ...result,
+          metadata: {
+            analysisType: "ml-powered",
+            processingTime: Date.now(),
+            featuresUsed: Object.keys(mlOptions).filter(key => mlOptions[key as keyof typeof mlOptions])
+          }
+        });
+      } catch (mlError) {
+        console.warn("ML Analysis failed, using fallback:", mlError);
+        // Fallback to basic scraper
+        const fallbackResult = await scraper.analyzePage(url);
+        res.json({
+          ...fallbackResult,
+          metadata: {
+            analysisType: "fallback",
+            processingTime: Date.now(),
+            note: "Used fallback scraper due to ML analysis failure"
+          }
+        });
+      }
     } catch (error) {
       console.error('Analysis error:', error);
       res.status(500).json({ 
@@ -40,10 +76,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Scrape data from a webpage
+  // Enhanced ML-powered scraping endpoint
   app.post("/api/scrape", async (req, res) => {
     try {
-      const { url, selectedFields } = req.body;
+      const { url, selectedFields, useML = true } = req.body;
       
       if (!url || typeof url !== 'string') {
         return res.status(400).json({ error: 'URL is required' });
@@ -69,11 +105,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       });
 
-      const scrapedData = await scraper.scrapePage(url, validatedFields);
+      let scrapedData;
+      let processingMethod = "standard";
+
+      if (useML) {
+        try {
+          scrapedData = await mlScraper.scrapeWithML(url, validatedFields);
+          processingMethod = "ml-powered";
+        } catch (mlError) {
+          console.warn("ML scraping failed, using fallback:", mlError);
+          scrapedData = await scraper.scrapePage(url, validatedFields);
+          processingMethod = "fallback";
+        }
+      } else {
+        scrapedData = await scraper.scrapePage(url, validatedFields);
+      }
+
+      // Log activity
+      await storage.logActivity('scrape_completed', url);
+
       res.json({
         success: true,
         data: scrapedData,
-        count: scrapedData.length
+        count: scrapedData.length,
+        metadata: {
+          processingMethod,
+          itemCount: scrapedData.length,
+          fieldsExtracted: validatedFields.length,
+          timestamp: new Date().toISOString()
+        }
       });
     } catch (error) {
       console.error('Scraping error:', error);
@@ -153,6 +213,50 @@ ${Object.entries(item).map(([key, value]) => {
         error: 'Failed to export data',
         details: error instanceof Error ? error.message : 'Unknown error'
       });
+    }
+  });
+
+  // Template management endpoints
+  app.get("/api/templates", async (req, res) => {
+    try {
+      const templates = await storage.getTemplates();
+      res.json({ templates });
+    } catch (error) {
+      console.error("Template retrieval error:", error);
+      res.status(500).json({ error: "Failed to retrieve templates" });
+    }
+  });
+
+  app.post("/api/templates", async (req, res) => {
+    try {
+      const template = req.body;
+      const savedTemplate = await storage.saveTemplate(template);
+      res.json({ template: savedTemplate });
+    } catch (error) {
+      console.error("Template save error:", error);
+      res.status(500).json({ error: "Failed to save template" });
+    }
+  });
+
+  app.delete("/api/templates/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      await storage.deleteTemplate(id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Template deletion error:", error);
+      res.status(500).json({ error: "Failed to delete template" });
+    }
+  });
+
+  // Analytics endpoint
+  app.get("/api/analytics", async (req, res) => {
+    try {
+      const analytics = await storage.getAnalytics();
+      res.json(analytics);
+    } catch (error) {
+      console.error("Analytics error:", error);
+      res.status(500).json({ error: "Failed to retrieve analytics" });
     }
   });
 
